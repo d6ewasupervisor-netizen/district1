@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.session.json
+auth-state.json
+.sas-session/
+.DS_Store
+*.log

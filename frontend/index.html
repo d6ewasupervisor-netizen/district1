@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>District 1 Calendar</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="js/config.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { getSession, setSession, apiFetch, apiBase } from './js/auth.js';
+    import { initCalendar } from './js/calendar.js';
+
+    const app = document.getElementById('app');
+
+    async function handleTokenLogin() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (!token) return false;
+      try {
+        const data = await fetch(`${apiBase()}/api/auth/verify-token?token=${encodeURIComponent(token)}`).then((r) => r.json());
+        if (!data.ok) throw new Error(data.error || 'Login failed');
+        setSession({ token: data.sessionToken, user: data.user });
+        window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+        return true;
+      } catch (err) {
+        app.innerHTML = `<div class="login-card"><p class="error">${err.message}</p><a href="index.html">Try again</a></div>`;
+        return true;
+      }
+    }
+
+    function renderLogin() {
+      app.innerHTML = `
+        <div class="login-wrap">
+          <div class="login-card">
+            <h1>District 1 Calendar</h1>
+            <p class="muted">Shared schedule, notes, and PROD sync for District 1 operations.</p>
+            <form id="login-form">
+              <label>Work email<input type="email" name="email" required placeholder="you@retailodyssey.com" /></label>
+              <button type="submit" class="btn btn-primary">Email me a sign-in link</button>
+            </form>
+            <p id="login-msg" class="muted"></p>
+          </div>
+        </div>`;
+      document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = new FormData(e.target).get('email');
+        const msg = document.getElementById('login-msg');
+        try {
+          await apiFetch('/api/auth/request-link', { method: 'POST', body: JSON.stringify({ email }) });
+          msg.textContent = 'Check your inbox for a one-time sign-in link.';
+        } catch (err) {
+          msg.textContent = err.message;
+        }
+      });
+    }
+
+    (async () => {
+      if (await handleTokenLogin()) {
+        if (getSession()?.user) await initCalendar(app);
+        return;
+      }
+      const session = getSession();
+      if (session?.user) {
+        await initCalendar(app);
+      } else {
+        renderLogin();
+      }
+    })();
+  </script>
+</body>
+</html>
