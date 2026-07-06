@@ -4,7 +4,7 @@ Team calendar for District 1 operations: live SAS PROD schedule sync, notes with
 
 ## Architecture
 
-- **Frontend** (`/frontend`) — static HTML/JS on GitHub Pages (`the-dump-bin/district1`)
+- **Frontend** (`/frontend`) — static HTML/JS on GitHub Pages ([d6ewasupervisor-netizen/district1](https://github.com/d6ewasupervisor-netizen/district1))
 - **Backend** (`/backend`) — Node.js + Express + Postgres on Railway
 - **Email** — Resend (`District 1 <info@retail-odyssey.com>`)
 - **PROD sync** — SAS team-scheduling + field-data, session pushed via `morning-auth.js`
