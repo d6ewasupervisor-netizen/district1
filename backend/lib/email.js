@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { buildSignInPageUrl } from './sign-in-code.js';
+import { reportResendPayload } from './email-outbox-ingest.js';
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) {
@@ -22,6 +23,15 @@ function escapeHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+async function sendTracked(sourceType, payload, extra = {}) {
+  const result = await getResend().emails.send(payload);
+  reportResendPayload(sourceType, payload, result, {
+    resendAllowed: !String(sourceType).includes('auth') && !String(sourceType).includes('login') && !String(sourceType).includes('invite'),
+    ...extra,
+  }).catch(() => {});
+  return result;
 }
 
 /** Scanner-safe: code in body, generic sign-in page URL only (no one-time token in links). */
@@ -75,7 +85,7 @@ export async function sendLoginCodeEmail({ to, code }) {
     html,
   };
   stampReplyTo(payload, null);
-  return getResend().emails.send(payload);
+  return sendTracked('login-code', payload, { resendAllowed: false });
 }
 
 export async function sendInviteEmail({ to, displayName, role, code }) {
@@ -92,7 +102,7 @@ export async function sendInviteEmail({ to, displayName, role, code }) {
     html,
   };
   stampReplyTo(payload, null);
-  return getResend().emails.send(payload);
+  return sendTracked('calendar-invite', payload, { resendAllowed: false, metadata: { role } });
 }
 
 export async function sendActivityEmail({ to, cc, authorEmail, authorName, subject, bodyHtml, bodyText }) {
@@ -105,7 +115,7 @@ export async function sendActivityEmail({ to, cc, authorEmail, authorName, subje
   };
   if (cc) payload.cc = cc;
   stampReplyTo(payload, authorEmail);
-  return getResend().emails.send(payload);
+  return sendTracked('calendar-activity', payload, { sentByEmail: authorEmail, sourceRef: subject });
 }
 
 export async function notifyTeam({ authorEmail, authorName, subject, summary, detailUrl }) {
