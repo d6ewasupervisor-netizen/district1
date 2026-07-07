@@ -86,6 +86,8 @@ const PORT = Number(process.env.PORT || 3000);
   }
 
   startSyncWorker();
+  const { startEodSessionPullWorker } = await import('./lib/eod-sas-pull.js');
+  startEodSessionPullWorker();
   bootstrapSyncIfEmpty().catch((err) => console.error('[boot] bootstrap sync', err.message));
 
   app.listen(PORT, () => {

@@ -1,8 +1,15 @@
-import { apiFetch, getSession, isAdmin, formatTs } from './auth.js';
+import { apiFetch, fetchUser, isAdmin, formatTs, signOut } from './auth.js';
 
 export async function initAdmin() {
-  const session = getSession();
-  if (!session?.user || !isAdmin(session.user.role)) {
+  let user;
+  try {
+    user = await fetchUser();
+  } catch {
+    window.location.href = 'signin.html';
+    return;
+  }
+
+  if (!isAdmin(user.role)) {
     window.location.href = 'index.html';
     return;
   }
@@ -11,12 +18,15 @@ export async function initAdmin() {
   app.innerHTML = `
     <header class="topbar">
       <div class="brand"><h1>Manage users</h1></div>
-      <a href="index.html" class="btn btn-ghost">← Calendar</a>
+      <div class="topbar-actions">
+        <a href="index.html" class="btn btn-ghost">← Calendar</a>
+        <button type="button" id="btn-logout" class="btn btn-ghost">Sign out</button>
+      </div>
     </header>
     <section class="admin-grid">
       <form id="invite-form" class="card">
         <h2>Invite user</h2>
-        <label>Email<input type="email" name="email" required /></label>
+        <label>Email<input type="email" name="email" required autocomplete="email" /></label>
         <label>Display name<input type="text" name="display_name" required /></label>
         <label>Role
           <select name="role">
@@ -25,7 +35,7 @@ export async function initAdmin() {
             <option value="admin">Admin — full access</option>
           </select>
         </label>
-        <button type="submit" class="btn btn-primary">Send invite</button>
+        <button type="submit" class="btn btn-primary">Add &amp; send sign-in link</button>
         <p id="invite-msg" class="muted"></p>
       </form>
       <div class="card">
@@ -34,6 +44,7 @@ export async function initAdmin() {
       </div>
     </section>`;
 
+  document.getElementById('btn-logout')?.addEventListener('click', signOut);
   await loadUsers();
   document.getElementById('invite-form').addEventListener('submit', onInvite);
 }
@@ -42,30 +53,32 @@ async function loadUsers() {
   const data = await apiFetch('/api/users');
   const el = document.getElementById('users-table');
   el.innerHTML = `
-    <table class="data-table">
-      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
-      <tbody>
-        ${data.users.map((u) => `
-          <tr data-id="${u.id}">
-            <td>${u.display_name}</td>
-            <td>${u.email}</td>
-            <td>
-              <select class="role-select" data-id="${u.id}">
-                <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>viewer</option>
-                <option value="modifier" ${u.role === 'modifier' ? 'selected' : ''}>modifier</option>
-                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
-              </select>
-            </td>
-            <td>${u.status}</td>
-            <td>${u.last_login_at ? formatTs(u.last_login_at) : '—'}</td>
-            <td>
-              ${u.status === 'active'
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+        <tbody>
+          ${data.users.map((u) => `
+            <tr data-id="${u.id}">
+              <td>${u.display_name}</td>
+              <td>${u.email}</td>
+              <td>
+                <select class="role-select" data-id="${u.id}">
+                  <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>viewer</option>
+                  <option value="modifier" ${u.role === 'modifier' ? 'selected' : ''}>modifier</option>
+                  <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+                </select>
+              </td>
+              <td>${u.status}</td>
+              <td>${u.last_login_at ? formatTs(u.last_login_at) : '—'}</td>
+              <td>
+                ${u.status === 'active'
     ? `<button class="btn btn-ghost btn-sm deactivate" data-id="${u.id}">Deactivate</button>`
     : `<button class="btn btn-ghost btn-sm reactivate" data-id="${u.id}">Reactivate</button>`}
-            </td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`;
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 
   el.querySelectorAll('.role-select').forEach((sel) => {
     sel.addEventListener('change', async () => {
@@ -115,7 +128,7 @@ async function onInvite(e) {
         role: fd.get('role'),
       }),
     });
-    msg.textContent = 'Invite sent — magic link emailed.';
+    msg.textContent = 'User added — Dump Bin sign-in link emailed.';
     e.target.reset();
     await loadUsers();
   } catch (err) {

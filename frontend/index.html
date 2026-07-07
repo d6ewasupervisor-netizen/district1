@@ -2,55 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
   <title>District 1 Calendar</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="js/config.js"></script>
+  <script src="js/auth-gate.js"></script>
 </head>
 <body>
   <div id="app"></div>
   <script type="module">
-    import { getSession, apiFetch } from './js/auth.js';
+    import { fetchUser } from './js/auth.js';
     import { initCalendar } from './js/calendar.js';
 
     const app = document.getElementById('app');
 
-    function renderLogin() {
+    function renderBlocked(message) {
       app.innerHTML = `
-        <div class="login-wrap">
-          <div class="login-card">
+        <div class="blocked-wrap">
+          <div class="blocked-card">
             <h1>District 1 Calendar</h1>
-            <p class="muted">Shared schedule, notes, and PROD sync for District 1 operations.</p>
-            <form id="login-form">
-              <label>Work email<input type="email" name="email" required placeholder="you@retailodyssey.com" /></label>
-              <button type="submit" class="btn btn-primary">Email me a sign-in code</button>
-            </form>
-            <p id="login-msg" class="muted"></p>
-            <p class="muted" style="margin-top:1rem;font-size:0.85rem;">
-              Already have a code? <a href="sign-in.html">Enter it on the sign-in page</a>.
-            </p>
+            <p class="error">${message}</p>
+            <p class="muted">Ask a District 1 admin to add you to the roster, then sign in again.</p>
+            <button type="button" class="btn btn-primary" id="btn-signout">Sign out</button>
           </div>
         </div>`;
-      document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = new FormData(e.target).get('email');
-        const msg = document.getElementById('login-msg');
-        try {
-          await apiFetch('/api/auth/request-link', { method: 'POST', body: JSON.stringify({ email }) });
-          msg.innerHTML = `We emailed a <strong>6-digit sign-in code</strong> to you.
-            <a href="sign-in.html?email=${encodeURIComponent(email)}">Enter your code</a> (open the sign-in page — do not use a link from the email with a token).`;
-        } catch (err) {
-          msg.textContent = err.message;
-        }
+      document.getElementById('btn-signout')?.addEventListener('click', () => {
+        window.dumpBinAuth?.signOut?.();
       });
     }
 
     (async () => {
-      const session = getSession();
-      if (session?.user) {
-        await initCalendar(app);
-      } else {
-        renderLogin();
+      await window.dumpBinAuthReady;
+      try {
+        const user = await fetchUser();
+        await initCalendar(app, user);
+      } catch (err) {
+        renderBlocked(err.message || 'Not authorized');
       }
     })();
   </script>

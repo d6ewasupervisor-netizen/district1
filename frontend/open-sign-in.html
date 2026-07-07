@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Open sign-in link — District 1 Calendar</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <style>
+    .signin-page { min-height: 100vh; padding: 2rem 1rem; max-width: 520px; margin: 0 auto; }
+    .signin-card { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; border: 1px solid var(--border); }
+    .signin-card .emphasis {
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    .signin-card ol { padding-left: 1.25rem; line-height: 1.55; }
+    .signin-error { color: #f87171; text-align: center; padding: 2rem 1rem; }
+  </style>
+</head>
+<body>
+  <main class="signin-page" id="main" hidden>
+    <h1>Open the link in your browser</h1>
+    <p class="muted">This page opened inside your mail app. Sign-in will not work here — use Chrome or Safari.</p>
+    <section class="signin-card">
+      <p class="emphasis">Do not tap the link. Press and hold it, then choose <strong>Open in browser</strong>.</p>
+      <ol>
+        <li>Go back to the sign-in email.</li>
+        <li><strong>Press and hold</strong> the Sign in button — do not tap it.</li>
+        <li>Choose <strong>Open in browser</strong> or <strong>Open in Chrome</strong>.</li>
+        <li>Complete sign-in in that browser window.</li>
+      </ol>
+    </section>
+  </main>
+  <div class="signin-error hidden" id="error"></div>
+  <script>
+    (function () {
+      function isAllowedDestination(url) {
+        try {
+          var u = new URL(url);
+          if (u.protocol !== 'https:') return false;
+          if (/\.up\.railway\.app$/i.test(u.host)) return true;
+          if (u.host.endsWith('.github.io') && u.pathname.toLowerCase().startsWith('/district1')) return true;
+          return false;
+        } catch (_) {
+          return false;
+        }
+      }
+      function isMobile() {
+        return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+      }
+      function isInAppBrowser() {
+        var ua = navigator.userAgent || '';
+        if (/Instagram|FBAN|FBAV|Twitter|Line\//i.test(ua)) return true;
+        if (/Gmail|Outlook|YahooMail|ymail|MailApp/i.test(ua)) return true;
+        if (/Android/i.test(ua) && /;\s*wv\)|\bwv\b/.test(ua)) return true;
+        if (/iPhone|iPad|iPod/i.test(ua)) {
+          if (window.navigator.standalone) return false;
+          if (/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua)) return false;
+          if (/GSA\/|GoogleApp/i.test(ua)) return true;
+          if (!/Safari/i.test(ua)) return true;
+        }
+        return false;
+      }
+      var params = new URLSearchParams(window.location.search);
+      var destination = params.get('to');
+      if (!destination || !isAllowedDestination(destination)) {
+        document.getElementById('error').textContent = 'This sign-in link is invalid or incomplete.';
+        document.getElementById('error').classList.remove('hidden');
+        return;
+      }
+      if (!isMobile() || !isInAppBrowser()) {
+        window.location.replace(destination);
+        return;
+      }
+      document.getElementById('main').hidden = false;
+    })();
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { verifySessionToken } from './tokens.js';
+import { verifyEodSessionToken } from './eod-session.js';
 import { query } from './db.js';
 
 const ROLE_RANK = { viewer: 1, modifier: 2, admin: 3 };
@@ -10,13 +10,17 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ ok: false, error: 'Authentication required' });
   }
   try {
-    const payload = verifySessionToken(token);
+    const payload = verifyEodSessionToken(token);
+    const email = String(payload.email).trim().toLowerCase();
     const { rows } = await query(
       `SELECT email, display_name, role, status FROM users WHERE email = $1 LIMIT 1`,
-      [payload.email],
+      [email],
     );
     if (!rows.length || rows[0].status !== 'active') {
-      return res.status(401).json({ ok: false, error: 'Account inactive or not found' });
+      return res.status(403).json({
+        ok: false,
+        error: 'Your Dump Bin sign-in is valid, but you are not on the District 1 calendar roster. Contact an admin.',
+      });
     }
     req.user = {
       email: rows[0].email,
@@ -25,7 +29,7 @@ export async function requireAuth(req, res, next) {
     };
     return next();
   } catch (err) {
-    return res.status(401).json({ ok: false, error: 'Invalid or expired session' });
+    return res.status(401).json({ ok: false, error: 'Invalid or expired session — sign in again via Dump Bin.' });
   }
 }
 

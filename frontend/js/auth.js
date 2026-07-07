@@ -1,36 +1,41 @@
-const SESSION_KEY = 'd1_session';
-
 export function apiBase() {
   return (window.D1_CONFIG?.API_BASE || '').replace(/\/+$/, '');
 }
 
-export function getSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-  } catch {
-    return null;
-  }
+export function getSessionToken() {
+  return window.dumpBinAuth?.getSession?.() || '';
 }
 
-export function setSession(data) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
-}
-
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+export async function fetchUser() {
+  const token = getSessionToken();
+  if (!token) return null;
+  const resp = await fetch(`${apiBase()}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || 'Not authorized for District 1');
+  return data.user;
 }
 
 export async function apiFetch(path, options = {}) {
-  const session = getSession();
+  const token = getSessionToken();
   const headers = { ...(options.headers || {}) };
-  if (session?.token) headers.Authorization = `Bearer ${session.token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
   if (options.body && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
   const resp = await fetch(`${apiBase()}${path}`, { ...options, headers });
   const data = await resp.json().catch(() => ({}));
+  if (resp.status === 401) {
+    window.dumpBinAuth?.signOut?.();
+    throw new Error('Session expired');
+  }
   if (!resp.ok) throw new Error(data.error || `Request failed (${resp.status})`);
   return data;
+}
+
+export function signOut() {
+  window.dumpBinAuth?.signOut?.();
 }
 
 export function canWrite(role) {
@@ -47,7 +52,6 @@ export function formatTs(iso) {
     timeZone: 'America/Los_Angeles',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
@@ -73,10 +77,13 @@ export function statusLabel(status) {
 
 export function parseHash() {
   const raw = (window.location.hash || '').replace(/^#/, '');
-  const parts = raw.split('/').filter(Boolean);
-  return { parts };
+  return { parts: raw.split('/').filter(Boolean) };
 }
 
 export function setHash(parts) {
   window.location.hash = parts.filter(Boolean).join('/');
+}
+
+export function basePath() {
+  return window.dumpBinAuth?.BASE_PATH || '';
 }
