@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { buildSignInPageUrl } from './sign-in-code.js';
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) {
@@ -8,59 +9,88 @@ function getResend() {
 }
 
 const FROM = () => process.env.EMAIL_FROM || 'District 1 <info@retail-odyssey.com>';
-
-function frontendBase() {
-  return (process.env.FRONTEND_BASE_URL || '').replace(/\/+$/, '');
-}
+const TTL_DAYS = () => Number(process.env.LINK_TTL_DAYS || 7);
 
 function stampReplyTo(payload, authorEmail) {
   if (authorEmail) payload.reply_to = authorEmail;
   else if (process.env.RESEND_REPLY_TO) payload.reply_to = process.env.RESEND_REPLY_TO;
 }
 
-export async function sendLoginLinkEmail({ to, link }) {
-  const subject = 'Your District 1 Calendar sign-in link';
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Scanner-safe: code in body, generic sign-in page URL only (no one-time token in links). */
+function signInCodeEmailContent({ code, heading, intro }) {
+  const signInUrl = buildSignInPageUrl();
+  const safeCode = escapeHtml(code);
+  const safeUrl = escapeHtml(signInUrl);
+  const ttl = TTL_DAYS();
+
   const text = [
-    'Hello,',
+    heading,
     '',
-    'Use the link below to sign in to the District 1 shared calendar.',
-    'This link expires in 7 days and can only be used once.',
+    intro,
     '',
-    link,
+    `Sign-in code: ${code}`,
+    '',
+    'Open the District 1 sign-in page (copy into your browser if needed):',
+    signInUrl,
+    '',
+    'Enter your work email and the code above. Do not share this code.',
+    `The code expires in ${ttl} days and works once.`,
     '',
     '— District 1 Calendar',
   ].join('\n');
+
   const html = `
-    <p>Hello,</p>
-    <p>Use the link below to sign in to the <strong>District 1 shared calendar</strong>.
-       This link expires in 7 days and can only be used once.</p>
-    <p><a href="${link}">${link}</a></p>
+    <p>${escapeHtml(intro)}</p>
+    <p style="font-size:28px;font-weight:bold;letter-spacing:6px;margin:24px 0;">${safeCode}</p>
+    <p>Open the sign-in page, enter your <strong>work email</strong> and this code:</p>
+    <p style="word-break:break-all;color:#334155;">${safeUrl}</p>
+    <p style="font-size:13px;color:#64748b;">Copy the address into your browser if your mail client blocks links.
+       Email security scanners cannot use this code — only you can complete sign-in on the page.</p>
+    <p style="font-size:13px;color:#64748b;">Expires in ${ttl} days · single use · do not forward</p>
     <p>— District 1 Calendar</p>
   `;
-  const payload = { from: FROM(), to, subject, text, html };
+
+  return { text, html, signInUrl };
+}
+
+export async function sendLoginCodeEmail({ to, code }) {
+  const { text, html } = signInCodeEmailContent({
+    code,
+    heading: 'District 1 Calendar sign-in',
+    intro: 'Use this code to sign in to the District 1 shared calendar.',
+  });
+  const payload = {
+    from: FROM(),
+    to,
+    subject: `District 1 Calendar sign-in code: ${code}`,
+    text,
+    html,
+  };
   stampReplyTo(payload, null);
   return getResend().emails.send(payload);
 }
 
-export async function sendInviteEmail({ to, displayName, role, link }) {
-  const subject = `You've been invited to District 1 Calendar (${role})`;
-  const text = [
-    `Hello ${displayName || ''},`.trim(),
-    '',
-    `You've been invited to the District 1 shared calendar as a **${role}**.`,
-    'Click the link below to sign in:',
-    '',
-    link,
-    '',
-    '— District 1 Calendar',
-  ].join('\n');
-  const html = `
-    <p>Hello ${displayName || ''},</p>
-    <p>You've been invited to the District 1 shared calendar as a <strong>${role}</strong>.</p>
-    <p><a href="${link}">Sign in to District 1 Calendar</a></p>
-    <p>— District 1 Calendar</p>
-  `;
-  const payload = { from: FROM(), to, subject, text, html };
+export async function sendInviteEmail({ to, displayName, role, code }) {
+  const { text, html } = signInCodeEmailContent({
+    code,
+    heading: `Welcome to District 1 Calendar (${role})`,
+    intro: `Hello ${displayName || ''}, you've been invited as a ${role}.`,
+  });
+  const payload = {
+    from: FROM(),
+    to,
+    subject: `District 1 Calendar invite — your sign-in code: ${code}`,
+    text,
+    html,
+  };
   stampReplyTo(payload, null);
   return getResend().emails.send(payload);
 }
@@ -93,9 +123,9 @@ export async function notifyTeam({ authorEmail, authorName, subject, summary, de
   ].join('\n');
 
   const html = `
-    <p><strong>${authorName}</strong> (${authorEmail}) posted an update:</p>
-    <p>${summary.replace(/\n/g, '<br>')}</p>
-    ${detailUrl ? `<p><a href="${detailUrl}">Open in calendar</a></p>` : ''}
+    <p><strong>${escapeHtml(authorName)}</strong> (${escapeHtml(authorEmail)}) posted an update:</p>
+    <p>${escapeHtml(summary).replace(/\n/g, '<br>')}</p>
+    ${detailUrl ? `<p><a href="${escapeHtml(detailUrl)}">Open in calendar</a></p>` : ''}
     <p>— District 1 Calendar</p>
   `;
 
@@ -111,6 +141,6 @@ export async function notifyTeam({ authorEmail, authorName, subject, summary, de
 }
 
 export function buildCalendarUrl(hash = '') {
-  const base = frontendBase();
+  const base = (process.env.FRONTEND_BASE_URL || '').replace(/\/+$/, '');
   return hash ? `${base}/#${hash.replace(/^#/, '')}` : base;
 }

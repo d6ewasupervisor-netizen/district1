@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in — District 1 Calendar</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="js/config.js"></script>
+</head>
+<body>
+  <div id="app" class="login-wrap">
+    <div class="login-card">
+      <h1>Sign in</h1>
+      <p class="muted">Enter the <strong>6-digit code</strong> from your email and your work address.
+         Email security scanners cannot use the code — only you can complete sign-in here.</p>
+      <form id="sign-in-form">
+        <label>Work email
+          <input type="email" name="email" id="email" required autocomplete="email" placeholder="you@retailodyssey.com" />
+        </label>
+        <label>Sign-in code
+          <input type="text" name="code" id="code" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" />
+        </label>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+      <p id="sign-in-msg" class="muted"></p>
+      <p><a href="index.html">← Request a new code</a></p>
+    </div>
+  </div>
+  <script type="module">
+    import { apiFetch, setSession } from './js/auth.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const emailHint = params.get('email');
+    if (emailHint) document.getElementById('email').value = emailHint;
+
+    document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const msg = document.getElementById('sign-in-msg');
+      msg.textContent = '';
+      msg.classList.remove('error');
+      try {
+        const data = await apiFetch('/api/auth/verify-code', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: fd.get('email'),
+            code: String(fd.get('code')).trim(),
+          }),
+        });
+        setSession({ token: data.sessionToken, user: data.user });
+        window.location.href = 'index.html';
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.classList.add('error');
+      }
+    });
+  </script>
+</body>
+</html>

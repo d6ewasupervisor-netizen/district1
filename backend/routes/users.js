@@ -3,7 +3,8 @@ import { query } from '../lib/db.js';
 import { requireAuth, requireRole } from '../lib/auth-middleware.js';
 import { ROLES, emailDomainAllowed } from '../lib/d1-config.js';
 import { issueLinkToken } from '../lib/tokens.js';
-import { sendInviteEmail, buildCalendarUrl } from '../lib/email.js';
+import { sendInviteEmail } from '../lib/email.js';
+import { generateSignInCode } from '../lib/sign-in-code.js';
 import { logActivity } from '../lib/activity.js';
 
 const router = express.Router();
@@ -55,14 +56,14 @@ router.post('/invite', async (req, res) => {
       [email, displayName, role, req.user.email],
     );
 
-    const { token, jti } = issueLinkToken(email);
+    const { jti } = issueLinkToken(email);
+    const signInCode = generateSignInCode();
     await query(
-      `INSERT INTO link_requests (email, jti, ip, user_agent) VALUES ($1, $2, $3, $4)`,
-      [email, jti, req.ip, 'invite'],
+      `INSERT INTO link_requests (email, jti, sign_in_code, ip, user_agent) VALUES ($1, $2, $3, $4, $5)`,
+      [email, jti, signInCode, req.ip, 'invite'],
     );
 
-    const link = `${buildCalendarUrl()}?token=${encodeURIComponent(token)}`;
-    await sendInviteEmail({ to: email, displayName, role, link });
+    await sendInviteEmail({ to: email, displayName, role, code: signInCode });
 
     await logActivity(req.user.email, req.user.display_name, 'user_invite', { email, role });
 

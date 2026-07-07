@@ -10,26 +10,10 @@
 <body>
   <div id="app"></div>
   <script type="module">
-    import { getSession, setSession, apiFetch, apiBase } from './js/auth.js';
+    import { getSession, apiFetch } from './js/auth.js';
     import { initCalendar } from './js/calendar.js';
 
     const app = document.getElementById('app');
-
-    async function handleTokenLogin() {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get('token');
-      if (!token) return false;
-      try {
-        const data = await fetch(`${apiBase()}/api/auth/verify-token?token=${encodeURIComponent(token)}`).then((r) => r.json());
-        if (!data.ok) throw new Error(data.error || 'Login failed');
-        setSession({ token: data.sessionToken, user: data.user });
-        window.history.replaceState({}, '', window.location.pathname + window.location.hash);
-        return true;
-      } catch (err) {
-        app.innerHTML = `<div class="login-card"><p class="error">${err.message}</p><a href="index.html">Try again</a></div>`;
-        return true;
-      }
-    }
 
     function renderLogin() {
       app.innerHTML = `
@@ -39,9 +23,12 @@
             <p class="muted">Shared schedule, notes, and PROD sync for District 1 operations.</p>
             <form id="login-form">
               <label>Work email<input type="email" name="email" required placeholder="you@retailodyssey.com" /></label>
-              <button type="submit" class="btn btn-primary">Email me a sign-in link</button>
+              <button type="submit" class="btn btn-primary">Email me a sign-in code</button>
             </form>
             <p id="login-msg" class="muted"></p>
+            <p class="muted" style="margin-top:1rem;font-size:0.85rem;">
+              Already have a code? <a href="sign-in.html">Enter it on the sign-in page</a>.
+            </p>
           </div>
         </div>`;
       document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -50,7 +37,8 @@
         const msg = document.getElementById('login-msg');
         try {
           await apiFetch('/api/auth/request-link', { method: 'POST', body: JSON.stringify({ email }) });
-          msg.textContent = 'Check your inbox for a one-time sign-in link.';
+          msg.innerHTML = `We emailed a <strong>6-digit sign-in code</strong> to you.
+            <a href="sign-in.html?email=${encodeURIComponent(email)}">Enter your code</a> (open the sign-in page — do not use a link from the email with a token).`;
         } catch (err) {
           msg.textContent = err.message;
         }
@@ -58,10 +46,6 @@
     }
 
     (async () => {
-      if (await handleTokenLogin()) {
-        if (getSession()?.user) await initCalendar(app);
-        return;
-      }
       const session = getSession();
       if (session?.user) {
         await initCalendar(app);
