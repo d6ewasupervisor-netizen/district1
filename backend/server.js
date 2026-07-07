@@ -17,9 +17,24 @@ const extraAllowed = (process.env.EXTRA_ALLOWED_ORIGINS || '')
   .map((s) => s.trim())
   .filter(Boolean);
 
+/** Browser Origin is scheme+host only — GitHub Pages project sites omit the repo path. */
+function originsFromBaseUrl(url) {
+  if (!url) return [];
+  const out = new Set();
+  const trimmed = String(url).trim().replace(/\/+$/, '');
+  out.add(trimmed);
+  try {
+    const parsed = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`);
+    out.add(`${parsed.protocol}//${parsed.host}`);
+  } catch {
+    /* ignore malformed */
+  }
+  return [...out];
+}
+
 const allowedOrigins = [
-  process.env.FRONTEND_BASE_URL,
-  process.env.BACKEND_BASE_URL,
+  ...originsFromBaseUrl(process.env.FRONTEND_BASE_URL),
+  ...originsFromBaseUrl(process.env.BACKEND_BASE_URL),
   process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null,
   'http://localhost:3000',
   'http://localhost:5500',
