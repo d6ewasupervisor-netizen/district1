@@ -66,28 +66,79 @@
     _hideStyle = null;
   }
 
-  async function exchangeLinkToken() {
+  // Scanner safety: do NOT exchange on load (mail scanners fetch URLs and some
+  // run page scripts — an automatic exchange burns the single-use link). Show
+  // one "Continue to sign in" button and POST /api/verify-token on that click.
+  function exchangeLinkToken() {
     var qp = new URLSearchParams(location.search);
     var linkToken = qp.get('token');
-    if (!linkToken) return !!getSession();
-    hidePage();
-    try {
-      var res = await fetch(EOD_API + '/api/verify-token?token=' + encodeURIComponent(linkToken));
-      var data = await res.json().catch(function () { return {}; });
-      qp.delete('token');
-      var newUrl = location.pathname + (qp.toString() ? '?' + qp.toString() : '') + location.hash;
-      try { history.replaceState({}, '', newUrl); } catch (_) {}
-      if (!res.ok || !data.ok || !data.token) {
+    if (!linkToken) return Promise.resolve(!!getSession());
+
+    qp.delete('token');
+    var newUrl = location.pathname + (qp.toString() ? '?' + qp.toString() : '') + location.hash;
+    try { history.replaceState({}, '', newUrl); } catch (_) {}
+
+    return new Promise(function (resolve) {
+      revealPage();
+      var overlay = document.createElement('div');
+      overlay.id = '__dumpbin_auth_gate_continue';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,32,.78);z-index:2147483000;'
+        + 'display:flex;align-items:center;justify-content:center;font-family:Calibri,Arial,sans-serif;';
+      var card = document.createElement('div');
+      card.style.cssText = 'background:#fff;border-radius:12px;padding:28px 30px;max-width:340px;text-align:center;';
+      var title = document.createElement('div');
+      title.textContent = 'Sign in';
+      title.style.cssText = 'font-size:18px;font-weight:600;color:#1b2733;margin-bottom:10px;';
+      var note = document.createElement('div');
+      note.textContent = 'One click finishes signing you in.';
+      note.style.cssText = 'font-size:13px;color:#5b6b7b;margin-bottom:18px;';
+      var btn = document.createElement('button');
+      btn.textContent = 'Continue to sign in';
+      btn.style.cssText = 'font-size:15px;padding:10px 22px;border:0;border-radius:8px;background:#2F6FB0;color:#fff;cursor:pointer;';
+      var err = document.createElement('div');
+      err.style.cssText = 'font-size:13px;color:#b3261e;margin-top:12px;min-height:16px;';
+      var alt = document.createElement('div');
+      alt.style.cssText = 'font-size:12px;color:#5b6b7b;margin-top:14px;';
+      var altLink = document.createElement('a');
+      altLink.href = SIGNIN_PATH;
+      altLink.textContent = 'Request a new link';
+      altLink.style.cssText = 'color:#2F6FB0;';
+      alt.appendChild(altLink);
+      card.appendChild(title);
+      card.appendChild(note);
+      card.appendChild(btn);
+      card.appendChild(err);
+      card.appendChild(alt);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        btn.textContent = 'Signing in…';
+        err.textContent = '';
         try {
-          sessionStorage.setItem('dumpBinSignInError', (data && data.error) || 'Sign-in link invalid or used.');
-        } catch (_) {}
-        return !!getSession();
-      }
-      setSession(data.token);
-      return true;
-    } catch (err) {
-      return !!getSession();
-    }
+          var res = await fetch(EOD_API + '/api/verify-token', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ token: linkToken }),
+          });
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok || !data.ok || !data.token) {
+            err.textContent = (data && data.error) || 'Sign-in link invalid or used.';
+            btn.disabled = false;
+            btn.textContent = 'Continue to sign in';
+            return;
+          }
+          setSession(data.token);
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          resolve(true);
+        } catch (_) {
+          err.textContent = 'Could not reach the sign-in service. Check your connection and try again.';
+          btn.disabled = false;
+          btn.textContent = 'Continue to sign in';
+        }
+      });
+    });
   }
 
   async function authFetch(url, opts) {
