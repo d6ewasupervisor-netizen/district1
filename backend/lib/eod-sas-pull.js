@@ -1,4 +1,4 @@
-import { applySession, isSessionAlive } from './sas-session.js';
+import { applySession, isSessionAlive, isGatewayMode, refreshGatewayStatus } from './sas-session.js';
 import { bootstrapSyncIfEmpty, runProdSync } from './sas-sync.js';
 
 const EOD_API = () => (process.env.EOD_API_URL || 'https://eod-api.the-dump-bin.com').replace(/\/+$/, '');
@@ -37,7 +37,24 @@ export async function pullSessionFromEodApi() {
 
 let pullTimer = null;
 
+function startGatewayStatusWorker() {
+  let wasAlive = false;
+  const tick = async () => {
+    const { alive } = await refreshGatewayStatus();
+    if (alive && !wasAlive) {
+      console.log('[sas-gateway] shared SAS session available through the office gateway');
+      bootstrapSyncIfEmpty().catch(() => {});
+      runProdSync().catch((err) => console.error('[sync] after gateway up', err.message));
+    }
+    wasAlive = alive;
+  };
+  tick();
+  pullTimer = setInterval(tick, 60 * 1000);
+  console.log('[sas-gateway] status poll every 60s');
+}
+
 export function startEodSessionPullWorker() {
+  if (isGatewayMode()) return startGatewayStatusWorker();
   const minutes = Number(process.env.EOD_SESSION_PULL_MINUTES || 5);
   const tick = async () => {
     if (isSessionAlive()) return;

@@ -1,5 +1,5 @@
 import express from 'express';
-import { applySession, sessionStatus } from '../lib/sas-session.js';
+import { applySession, sessionStatus, isGatewayMode } from '../lib/sas-session.js';
 import { bootstrapSyncIfEmpty } from '../lib/sas-sync.js';
 
 const router = express.Router();
@@ -9,6 +9,9 @@ router.post('/sas-session', async (req, res) => {
   const auth = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!secret || auth !== secret) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  if (isGatewayMode()) {
+    return res.status(409).json({ ok: false, error: 'The shared SAS session lives on the office gateway' });
   }
 
   const { cookieHeader, csrfToken, authToken } = req.body || {};
